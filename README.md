@@ -90,22 +90,38 @@ npm install dsh-soul
 
 ## 配置
 
-配置走 `cordis.patch.yml` 的 `config:` 字段：
+装好之后，**设置 → 暗记忆**（也就是插件页里的 `soul` 一项）会有一整页表单：开关、注入方式、各项字数预算、去重阈值、脱敏。
+
+这一页不是手写的，是插件导出的 `Config` schema 自动投影出来的——所以改了 schema，页面跟着变。
+
+想用文件配置也行：
 
 ```yaml
 - id: soul
   name: dsh-soul
   config:
+    injectMode: auto      # auto | system | message
     profileBudget: 1400   # 画像字符预算
     handoffBudget: 320    # 交接卡字符预算
     recentCards: 6        # 「最近确认」最多几条
     recentBudget: 260     # 「最近确认」字符预算
     recallLimit: 5        # 单次检索条数
-    inject: true          # 是否在首轮注入
     redact: true          # 写入前过滤疑似密钥
 ```
 
+> 注意：**没在 schema 里声明的键会被宿主直接剥掉**。想加新配置，先加进 `Config`。
+
 完整默认值见 [`lib/config.js`](lib/config.js)。
+
+### 注入方式
+
+| 模式 | 行为 | 聊天记录 |
+|---|---|---|
+| `system`（默认走这条） | 注册一条 per-agent 的系统提示段 | **看不见** |
+| `message` | 作为一条用户消息插在提问前 | 会显示一大段 |
+| `auto` | 优先 system；拿不到 agent 作用域时退回 message | 视情况 |
+
+`system` 模式同时更省 token：系统提示是请求前缀的一部分，天然吃缓存。
 
 ### 升级要重装，不能只改文件
 

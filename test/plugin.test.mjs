@@ -232,19 +232,120 @@ test('soul_remember 挡住疑似密钥', async () => {
   assert.ok(!JSON.stringify(recalled).includes('sk-abcdefghijklmnopqrstuvwx'))
 })
 
-test('关闭 inject 后不再注入', async () => {
+test('enabled=false 时插件什么都不注册', async () => {
+  const host = fakeHost()
+  await apply(host.ctx, { dataDir: await newDir(), enabled: false })
+  assert.equal(host.tools.size, 0, '关闭后不该注册任何工具')
+})
+
+// -- 系统提示注入（主路径）---------------------------------------------------
+
+/** 假的 per-agent systemPrompt 服务，只记下注册的段。 */
+function promptRecorder() {
+  const sections = []
+  return {
+    sections,
+    section(definition) {
+      sections.push(definition)
+      return () => {
+        const index = sections.indexOf(definition)
+        if (index >= 0) sections.splice(index, 1)
+      }
+    },
+  }
+}
+
+test('记忆进系统提示，不进聊天记录', async () => {
   const dir = await newDir()
+
+  const writer = await booted({ dataDir: dir })
+  await writer.host.tools
+    .get('soul_shape')
+    .execute({ section: 'who', text: '他是 CrRooser，说中文。' }, { agent: { session: sessionOf('s1') } })
+  await settle()
+
+  const reader = await booted({ dataDir: dir })
+  const prompt = promptRecorder()
+  const agent = { session: sessionOf('s12'), ctx: { systemPrompt: prompt } }
+
+  await reader.host.emit('agent/created', { agent })
+
+  assert.equal(prompt.sections.length, 1, '应该注册一条系统提示段')
+  const section = prompt.sections[0]
+  assert.equal(section.name, 'soul:memory')
+  assert.equal(typeof section.text, 'function')
+  assert.ok(section.text().includes('CrRooser'), '段内容要带上画像')
+
+  // 同一份记忆不能既进系统提示、又作为消息插进聊天
+  const decision = await reader.host.emit(
+    'agent/pre-step',
+    { agent, signal: { aborted: false } },
+    enter([userMessage('继续')]),
+  )
+  assert.equal(decision.messages.length, 1, '聊天记录里不该出现记忆气泡')
+})
+
+test('段内容在会话内是冻结的', async () => {
+  const dir = await newDir()
+
+  const writer = await booted({ dataDir: dir })
+  const exec = { agent: { session: sessionOf('s1') } }
+  await writer.host.tools.get('soul_shape').execute({ section: 'who', text: '第一版画像' }, exec)
+  await settle()
+
+  const reader = await booted({ dataDir: dir })
+  const prompt = promptRecorder()
+  const agent = { session: sessionOf('s13'), ctx: { systemPrompt: prompt } }
+  await reader.host.emit('agent/created', { agent })
+
+  const before = prompt.sections[0].text()
+
+  // 会话中途改画像：本会话的系统提示不该跟着变，否则前缀缓存全废
+  await reader.host.tools.get('soul_shape').execute({ section: 'who', text: '第二版画像' }, exec)
+
+  assert.equal(prompt.sections[0].text(), before)
+  assert.ok(before.includes('第一版画像'))
+})
+
+test('会话销毁时摘掉系统提示段', async () => {
+  const dir = await newDir()
+
   const writer = await booted({ dataDir: dir })
   await writer.host.tools
     .get('soul_shape')
     .execute({ section: 'who', text: '他是 CrRooser。' }, { agent: { session: sessionOf('s1') } })
   await settle()
 
-  const reader = await booted({ dataDir: dir, inject: false })
+  const reader = await booted({ dataDir: dir })
+  const prompt = promptRecorder()
+  const agent = { session: sessionOf('s14'), ctx: { systemPrompt: prompt } }
+  await reader.host.emit('agent/created', { agent })
+  assert.equal(prompt.sections.length, 1)
+
+  await reader.host.emit('agent/disposed', { agent })
+  assert.equal(prompt.sections.length, 0, '段应该随会话卸载而摘掉')
+})
+
+test('injectMode=message 时走消息注入', async () => {
+  const dir = await newDir()
+
+  const writer = await booted({ dataDir: dir })
+  await writer.host.tools
+    .get('soul_shape')
+    .execute({ section: 'who', text: '他是 CrRooser。' }, { agent: { session: sessionOf('s1') } })
+  await settle()
+
+  const reader = await booted({ dataDir: dir, injectMode: 'message' })
+  const prompt = promptRecorder()
+  const agent = { session: sessionOf('s15'), ctx: { systemPrompt: prompt } }
+
+  await reader.host.emit('agent/created', { agent })
+  assert.equal(prompt.sections.length, 0, 'message 模式不该注册系统提示段')
+
   const decision = await reader.host.emit(
     'agent/pre-step',
-    { agent: { session: sessionOf('s10') }, signal: { aborted: false } },
+    { agent, signal: { aborted: false } },
     enter([userMessage('你好')]),
   )
-  assert.equal(decision.messages.length, 1)
+  assert.equal(decision.messages.length, 2, '应该退回消息注入')
 })
