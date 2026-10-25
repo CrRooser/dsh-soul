@@ -1,3 +1,4 @@
+本插件完全由deepseek编写
 # dsh-soul
 
 跨会话记忆、人格养成与关系分寸，给 DeepSeek Harness 用的插件。
