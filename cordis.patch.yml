@@ -1,0 +1,5 @@
+# dsh-soul bundle patch: inserts this plugin into a profile's layer stack.
+# Rows reference the package by name so Node resolution finds the installed code.
+- insert:
+    - id: soul
+      name: dsh-soul
