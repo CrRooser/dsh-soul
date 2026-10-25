@@ -142,6 +142,24 @@ test('持久化：写盘后重新加载，卡片与画像都在', async () => {
   assert.equal(reloaded.cards[0].tags[0], '测试')
 })
 
+test('写入后不需要显式 flush：存储层自己会落盘', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'dsh-soul-'))
+  dirs.push(dir)
+
+  const store = new SoulStore(dir)
+  await store.load()
+  store.addCard({ text: '自动落盘测试条目', kind: 'fact' })
+  store.setSection('who', '自动落盘')
+
+  // 故意不调用 flush()，等 markDirty 的防抖窗口过去
+  await new Promise((resolve) => setTimeout(resolve, 1400))
+
+  const reloaded = new SoulStore(dir)
+  await reloaded.load()
+  assert.equal(reloaded.activeCards().length, 1, '卡片应该自己落盘')
+  assert.equal(reloaded.getSection('who'), '自动落盘', '画像应该自己落盘')
+})
+
 test('损坏的文件不会让加载失败，而是被备份后重来', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'dsh-soul-'))
   dirs.push(dir)

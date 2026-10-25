@@ -107,6 +107,18 @@ npm install dsh-soul
 
 完整默认值见 [`lib/config.js`](lib/config.js)。
 
+### 升级要重装，不能只改文件
+
+pnpm 对 `file:` 依赖做的是**复制**而不是软链。也就是说：改完源码，装好的那份不会跟着变。升级步骤是——
+
+```bash
+# 在 DSH 插件管理里
+remove_bundle dsh-soul
+install_bundle file:/path/to/dsh-soul
+```
+
+直接 `install_bundle` 会报 `already-installed`，`set_bundle` 也不会重新读代码。
+
 ## 数据在哪
 
 ```
