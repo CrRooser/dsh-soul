@@ -349,3 +349,63 @@ test('injectMode=message 时走消息注入', async () => {
   )
   assert.equal(decision.messages.length, 2, '应该退回消息注入')
 })
+
+test('历史里已有记忆块的会话不再注入（宿主重启后不重复）', async () => {
+  const dir = await newDir()
+
+  const writer = await booted({ dataDir: dir })
+  await writer.host.tools
+    .get('soul_shape')
+    .execute({ section: 'who', text: '他是 CrRooser。' }, { agent: { session: sessionOf('s1') } })
+  await settle()
+
+  const reader = await booted({ dataDir: dir })
+  const prompt = promptRecorder()
+
+  // 模拟重启后恢复的老会话：日志里已经躺着上一轮注入的那块
+  const agent = {
+    ctx: { systemPrompt: prompt },
+    session: {
+      header: { id: 's16', cwd: 'D:/proj' },
+      ownEvents: () => ([{
+        type: 'user/message',
+        data: userMessage('【长期记忆 · dsh-soul】\n## 关于他\n旧内容'),
+      }]),
+    },
+  }
+
+  await reader.host.emit('agent/created', { agent })
+  assert.equal(prompt.sections.length, 0, '历史里已有那块，不该再注册系统提示段')
+
+  const decision = await reader.host.emit(
+    'agent/pre-step',
+    { agent, signal: { aborted: false } },
+    enter([userMessage('继续')]),
+  )
+  assert.equal(decision.messages.length, 1, '聊天记录里不该再冒出第二块')
+})
+
+test('没有标记的老会话照常注入', async () => {
+  const dir = await newDir()
+
+  const writer = await booted({ dataDir: dir })
+  await writer.host.tools
+    .get('soul_shape')
+    .execute({ section: 'who', text: '他是 CrRooser。' }, { agent: { session: sessionOf('s1') } })
+  await settle()
+
+  const reader = await booted({ dataDir: dir })
+  const agent = {
+    session: {
+      header: { id: 's17', cwd: 'D:/proj' },
+      ownEvents: () => ([{ type: 'user/message', data: userMessage('普通的一句话') }]),
+    },
+  }
+
+  const decision = await reader.host.emit(
+    'agent/pre-step',
+    { agent, signal: { aborted: false } },
+    enter([userMessage('继续')]),
+  )
+  assert.equal(decision.messages.length, 2)
+})
