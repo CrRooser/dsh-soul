@@ -1,6 +1,6 @@
 {
   "name": "dsh-soul",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Cross-session memory, persona and rapport for DeepSeek Harness — read once, stay silent, grow slowly.",
   "keywords": [
     "deepseek-harness",
