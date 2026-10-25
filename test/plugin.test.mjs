@@ -90,6 +90,7 @@ test('插件导出 name 与 apply', () => {
 test('装载后五个工具都在', async () => {
   const { host } = await booted()
   assert.deepEqual([...host.tools.keys()].sort(), [
+    'soul_diag',
     'soul_forget',
     'soul_profile',
     'soul_recall',
