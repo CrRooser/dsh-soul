@@ -87,11 +87,13 @@ test('插件导出 name 与 apply', () => {
   assert.equal(typeof apply, 'function')
 })
 
-test('装载后五个工具都在', async () => {
+test('装载后工具都在', async () => {
   const { host } = await booted()
   assert.deepEqual([...host.tools.keys()].sort(), [
+    'soul_bootstrap',
     'soul_diag',
     'soul_forget',
+    'soul_persona',
     'soul_profile',
     'soul_recall',
     'soul_remember',
